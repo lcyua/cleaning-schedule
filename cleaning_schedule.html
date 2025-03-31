@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>청소 구역 배정</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; text-align: center; }
+        table { border-collapse: collapse; width: 80%; margin: 20px auto; }
+        th, td { border: 1px solid #ddd; padding: 8px; }
+        th { background-color: #f2f2f2; }
+        .admin-login { margin-top: 20px; }
+        .admin-panel { display: none; margin-top: 20px; }
+        .admin-panel input { margin: 5px; }
+        button { padding: 5px 10px; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <h1>청소 구역 배정</h1>
+    <div id="date-display"></div>
+    <div id="schedule"></div>
+    <div class="admin-login">
+        <button onclick="showAdminLogin()">관리자 로그인</button>
+    </div>
+    <div id="admin-login-form" style="display: none; margin-top: 10px;">
+        <input type="password" id="admin-password" placeholder="비밀번호 입력">
+        <button onclick="loginAdmin()">로그인</button>
+    </div>
+    <div id="admin-panel" class="admin-panel">
+        <h2>관리자 설정</h2>
+        <div id="student-edit">
+            <h3>학생 이름 변경</h3>
+            <input type="text" id="new-students" placeholder="이름을 공백으로 구분">
+            <button onclick="updateStudents()">학생 업데이트</button>
+        </div>
+        <div id="area-edit">
+            <h3>청소 구역 변경</h3>
+            <input type="text" id="new-areas" placeholder="구역을 ,로 구분">
+            <button onclick="updateAreas()">구역 업데이트</button>
+        </div>
+        <button onclick="logoutAdmin()">로그아웃</button>
+    </div>
+
+    <script>
+        const PASSWORD = "1214";
+        const KST_OFFSET = 9 * 60 * 60 * 1000; // 한국 표준시 (UTC+9)
+        const SERVER_URL = "https://cleaning-schedule.onrender.com"; // Render URL로 변경
+
+        function getKSTDate() {
+            const now = new Date();
+            return new Date(now.getTime() + KST_OFFSET);
+        }
+
+        async function fetchSchedule() {
+            const now = getKSTDate();
+            const weekdays = ["일", "월", "화", "수", "목", "금", "토"];
+            document.getElementById("date-display").innerHTML = 
+                `오늘 날짜: ${now.getFullYear()}년 ${now.getMonth() + 1}월 ${now.getDate()}일 (${weekdays[now.getDay()]}요일)`;
+
+            const scheduleDiv = document.getElementById("schedule");
+            if (now.getDay() === 1 || now.getDay() === 2 || now.getDay() === 3) {
+                try {
+                    const response = await fetch(`${SERVER_URL}/schedule`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+                    const assignments = await response.json();
+                    console.log("Fetched assignments:", assignments); // 디버깅 로그 추가
+                    if (assignments.length === 0) {
+                        scheduleDiv.innerHTML = "<p>배정 데이터가 없습니다.</p>";
+                        return;
+                    }
+                    let table = "<h2>오늘의 청소 구역 배정표</h2><table><tr><th>이름</th><th>청소 구역</th></tr>";
+                    assignments.forEach(({ student, area }) => {
+                        table += `<tr><td>${student}</td><td>${area}</td></tr>`;
+                    });
+                    table += "</table>";
+                    scheduleDiv.innerHTML = table;
+                } catch (error) {
+                    console.error("Error fetching schedule:", error); // 에러 로그 추가
+                    scheduleDiv.innerHTML = "<p>데이터를 가져오는 중 오류가 발생했습니다.</p>";
+                }
+            } else {
+                scheduleDiv.innerHTML = "<p>오늘은 봉사 요일이 아닙니다.</p>";
+            }
+        }
+
+        function showAdminLogin() {
+            document.getElementById("admin-login-form").style.display = "block";
+        }
+
+        function loginAdmin() {
+            const inputPassword = document.getElementById("admin-password").value;
+            if (inputPassword === PASSWORD) {
+                document.getElementById("admin-login-form").style.display = "none";
+                document.getElementById("admin-panel").style.display = "block";
+                document.getElementById("admin-password").value = "";
+            } else {
+                alert("잘못된 비밀번호입니다.");
+            }
+        }
+
+        function logoutAdmin() {
+            document.getElementById("admin-panel").style.display = "none";
+        }
+
+        async function updateStudents() {
+            const newStudentsInput = document.getElementById("new-students").value.trim();
+            if (newStudentsInput) {
+                const newStudents = newStudentsInput.split(" ");
+                if (newStudents.length === 6) {
+                    await fetch(`${SERVER_URL}/students`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ students: newStudents })
+                    });
+                    alert("학생 이름이 업데이트되었습니다. 다음 배정부터 적용됩니다.");
+                    document.getElementById("new-students").value = "";
+                } else {
+                    alert("학생은 정확히 6명이어야 합니다.");
+                }
+            }
+        }
+
+        async function updateAreas() {
+            const newAreasInput = document.getElementById("new-areas").value.trim();
+            if (newAreasInput) {
+                const newAreas = newAreasInput.split(",");
+                if (newAreas.length === 6) {
+                    await fetch(`${SERVER_URL}/areas`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ areas: newAreas.map(area => area.trim()) })
+                    });
+                    alert("청소 구역이 업데이트되었습니다. 다음 배정부터 적용됩니다.");
+                    document.getElementById("new-areas").value = "";
+                } else {
+                    alert("청소 구역은 정확히 6개여야 합니다.");
+                }
+            }
+        }
+
+        window.onload = fetchSchedule;
+    </script>
+</body>
+</html>

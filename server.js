@@ -33,10 +33,10 @@ async function initDB() {
     if (areaCount.count === 0) {
         const initialAreas = [
             "빗자루, 대걸래, 분리수거",
-            "빗자루, 대걸래, 분리수거",
-            "환기, 빗자루, 대걸래",
-            "손걸래, 세절기",
-            "손걸래, 세절기",
+            "빗자루, 대걸레, 분리수거",
+            "환기, 빗자루, 대걸레",
+            "손걸레, 세절기",
+            "손걸레, 세절기",
             "교사쓰레기통, 전체 쓰레기통 정리"
         ];
         for (let i = 0; i < initialAreas.length; i++) {
@@ -104,6 +104,11 @@ async function startServer() {
     } else {
         await assignCleaningAreas(db); // 기존 로직 유지
     }
+
+    // 루트 경로(/)에 대한 기본 응답 추가
+    app.get("/", (req, res) => {
+        res.send("청소 구역 배정 서버가 실행 중입니다. /schedule 경로를 통해 데이터를 확인하세요.");
+    });
 
     app.get("/schedule", async (req, res) => {
         const assignments = await db.all(`

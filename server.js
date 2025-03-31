@@ -96,7 +96,14 @@ async function startServer() {
 
     cron.schedule("0 8 * * 1", () => assignCleaningAreas(db), { timezone: "Asia/Seoul" });
 
-    await assignCleaningAreas(db);
+    // 오늘 수동으로 배정 실행 (오늘만 초기값 설정)
+    const now = new Date(Date.now() + KST_OFFSET);
+    if (now.getDay() === 1) { // 월요일인 경우
+        await db.run("DELETE FROM last_update"); // 마지막 업데이트 기록 삭제
+        await assignCleaningAreas(db); // 배정 강제 실행
+    } else {
+        await assignCleaningAreas(db); // 기존 로직 유지
+    }
 
     app.get("/schedule", async (req, res) => {
         const assignments = await db.all(`

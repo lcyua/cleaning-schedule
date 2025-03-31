@@ -2,9 +2,11 @@ const express = require("express");
 const sqlite3 = require("sqlite3").verbose();
 const { open } = require("sqlite");
 const cron = require("node-cron");
+const cors = require("cors"); // CORS 추가
 
 const app = express();
 app.use(express.json());
+app.use(cors()); // CORS 미들웨어 추가
 
 const KST_OFFSET = 9 * 60 * 60 * 1000; // 한국 표준시 (UTC+9)
 
@@ -33,10 +35,10 @@ async function initDB() {
     if (areaCount.count === 0) {
         const initialAreas = [
             "빗자루, 대걸래, 분리수거",
-            "빗자루, 대걸레, 분리수거",
-            "환기, 빗자루, 대걸레",
-            "손걸레, 세절기",
-            "손걸레, 세절기",
+            "빗자루, 대걸래, 분리수거",
+            "환기, 빗자루, 대걸래",
+            "손걸래, 세절기",
+            "손걸래, 세절기",
             "교사쓰레기통, 전체 쓰레기통 정리"
         ];
         for (let i = 0; i < initialAreas.length; i++) {
@@ -72,9 +74,13 @@ async function assignCleaningAreas(db) {
         (now.getDay() === 1 && now.getHours() >= 8 && 
         (weekNum !== getWeekNumber(new Date(lastUpdate.timestamp)) || year !== new Date(lastUpdate.timestamp).getFullYear()));
 
+    console.log("shouldUpdate:", shouldUpdate); // 디버깅 로그 추가
     if (shouldUpdate) {
         const students = await db.all("SELECT id, name FROM students");
         const areas = await db.all("SELECT id, name FROM areas");
+        console.log("Students:", students); // 디버깅 로그 추가
+        console.log("Areas:", areas); // 디버깅 로그 추가
+
         const shuffledStudents = shuffleArray(students);
 
         await db.run("DELETE FROM assignments");
@@ -88,6 +94,7 @@ async function assignCleaningAreas(db) {
             "INSERT OR REPLACE INTO last_update (id, timestamp) VALUES (1, ?)",
             now.toISOString()
         );
+        console.log("Assignments updated successfully."); // 디버깅 로그 추가
     }
 }
 
@@ -105,7 +112,6 @@ async function startServer() {
         await assignCleaningAreas(db); // 기존 로직 유지
     }
 
-    // 루트 경로(/)에 대한 기본 응답 추가
     app.get("/", (req, res) => {
         res.send("청소 구역 배정 서버가 실행 중입니다. /schedule 경로를 통해 데이터를 확인하세요.");
     });
@@ -117,6 +123,7 @@ async function startServer() {
             JOIN students s ON s.id = assignments.student_id 
             JOIN areas a ON a.id = assignments.area_id
         `);
+        console.log("Assignments sent to client:", assignments); // 디버깅 로그 추가
         res.json(assignments);
     });
 

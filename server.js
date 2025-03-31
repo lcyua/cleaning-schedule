@@ -2,11 +2,11 @@ const express = require("express");
 const sqlite3 = require("sqlite3").verbose();
 const { open } = require("sqlite");
 const cron = require("node-cron");
-const cors = require("cors"); // CORS 추가
+const cors = require("cors");
 
 const app = express();
 app.use(express.json());
-app.use(cors()); // CORS 미들웨어 추가
+app.use(cors());
 
 const KST_OFFSET = 9 * 60 * 60 * 1000; // 한국 표준시 (UTC+9)
 
@@ -23,27 +23,25 @@ async function initDB() {
         CREATE TABLE IF NOT EXISTS last_update (id INTEGER PRIMARY KEY, timestamp TEXT);
     `);
 
-    const studentCount = await db.get("SELECT COUNT(*) as count FROM students");
-    if (studentCount.count === 0) {
-        const initialStudents = ["박찬진", "이동현", "정지훈", "정한영", "하현일", "허윤재"];
-        for (let i = 0; i < initialStudents.length; i++) {
-            await db.run("INSERT INTO students (id, name) VALUES (?, ?)", i + 1, initialStudents[i]);
-        }
+    // 학생 데이터 강제 삽입
+    await db.run("DELETE FROM students");
+    const initialStudents = ["박찬진", "이동현", "정지훈", "정한영", "하현일", "허윤재"];
+    for (let i = 0; i < initialStudents.length; i++) {
+        await db.run("INSERT INTO students (id, name) VALUES (?, ?)", i + 1, initialStudents[i]);
     }
 
-    const areaCount = await db.get("SELECT COUNT(*) as count FROM areas");
-    if (areaCount.count === 0) {
-        const initialAreas = [
-            "빗자루, 대걸래, 분리수거",
-            "빗자루, 대걸래, 분리수거",
-            "환기, 빗자루, 대걸래",
-            "손걸래, 세절기",
-            "손걸래, 세절기",
-            "교사쓰레기통, 전체 쓰레기통 정리"
-        ];
-        for (let i = 0; i < initialAreas.length; i++) {
-            await db.run("INSERT INTO areas (id, name) VALUES (?, ?)", i + 1, initialAreas[i]);
-        }
+    // 청소 구역 데이터 강제 삽입
+    await db.run("DELETE FROM areas");
+    const initialAreas = [
+        "빗자루, 대걸래, 분리수거",
+        "빗자루, 대걸래, 분리수거",
+        "환기, 빗자루, 대걸래",
+        "손걸래, 세절기",
+        "손걸래, 세절기",
+        "교사쓰레기통, 전체 쓰레기통 정리"
+    ];
+    for (let i = 0; i < initialAreas.length; i++) {
+        await db.run("INSERT INTO areas (id, name) VALUES (?, ?)", i + 1, initialAreas[i]);
     }
 
     return db;
@@ -74,12 +72,12 @@ async function assignCleaningAreas(db) {
         (now.getDay() === 1 && now.getHours() >= 8 && 
         (weekNum !== getWeekNumber(new Date(lastUpdate.timestamp)) || year !== new Date(lastUpdate.timestamp).getFullYear()));
 
-    console.log("shouldUpdate:", shouldUpdate); // 디버깅 로그 추가
+    console.log("shouldUpdate:", shouldUpdate);
     if (shouldUpdate) {
         const students = await db.all("SELECT id, name FROM students");
         const areas = await db.all("SELECT id, name FROM areas");
-        console.log("Students:", students); // 디버깅 로그 추가
-        console.log("Areas:", areas); // 디버깅 로그 추가
+        console.log("Students:", students);
+        console.log("Areas:", areas);
 
         const shuffledStudents = shuffleArray(students);
 
@@ -94,7 +92,7 @@ async function assignCleaningAreas(db) {
             "INSERT OR REPLACE INTO last_update (id, timestamp) VALUES (1, ?)",
             now.toISOString()
         );
-        console.log("Assignments updated successfully."); // 디버깅 로그 추가
+        console.log("Assignments updated successfully.");
     }
 }
 
@@ -103,14 +101,9 @@ async function startServer() {
 
     cron.schedule("0 8 * * 1", () => assignCleaningAreas(db), { timezone: "Asia/Seoul" });
 
-    // 오늘 수동으로 배정 실행 (오늘만 초기값 설정)
-    const now = new Date(Date.now() + KST_OFFSET);
-    if (now.getDay() === 1) { // 월요일인 경우
-        await db.run("DELETE FROM last_update"); // 마지막 업데이트 기록 삭제
-        await assignCleaningAreas(db); // 배정 강제 실행
-    } else {
-        await assignCleaningAreas(db); // 기존 로직 유지
-    }
+    // 강제로 배정 실행
+    await db.run("DELETE FROM last_update");
+    await assignCleaningAreas(db);
 
     app.get("/", (req, res) => {
         res.send("청소 구역 배정 서버가 실행 중입니다. /schedule 경로를 통해 데이터를 확인하세요.");
@@ -123,7 +116,7 @@ async function startServer() {
             JOIN students s ON s.id = assignments.student_id 
             JOIN areas a ON a.id = assignments.area_id
         `);
-        console.log("Assignments sent to client:", assignments); // 디버깅 로그 추가
+        console.log("Assignments sent to client:", assignments);
         res.json(assignments);
     });
 
